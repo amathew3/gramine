@@ -133,7 +133,7 @@ struct libos_epoll_handle {
 struct libos_handle {
     enum libos_handle_type type;
     bool is_dir;
-
+    uint64_t id;
     refcount_t ref_count;
 
     struct libos_fs* fs;
