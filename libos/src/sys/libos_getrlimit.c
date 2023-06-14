@@ -176,3 +176,6 @@ long libos_syscall_sysinfo(struct sysinfo* info) {
     info->procs     = 1; /* report only this Gramine process */
     return 0;
 }
+long libos_syscall_times(){
+	return 0;
+}
