@@ -47,7 +47,13 @@ static ssize_t eventfd_write(struct libos_handle* hdl, const void* buf, size_t c
 
     return (ssize_t)count;
 }
-
+static ssize_t timerfd_write(struct libos_handle* hdl, const void* buf, size_t count,
+                             file_off_t* pos) {
+return 0;
+}
+static ssize_t timerfd_read(struct libos_handle* hdl, void* buf, size_t count, file_off_t* pos) {
+return 0;
+}
 struct libos_fs_ops eventfd_fs_ops = {
     .read  = &eventfd_read,
     .write = &eventfd_write,
@@ -56,4 +62,13 @@ struct libos_fs_ops eventfd_fs_ops = {
 struct libos_fs eventfd_builtin_fs = {
     .name   = "eventfd",
     .fs_ops = &eventfd_fs_ops,
+};
+struct libos_fs_ops timerfd_fs_ops = {
+    .read  = &timerfd_read,
+    .write = &timerfd_write,
+};
+
+struct libos_fs timerfd_builtin_fs = {
+    .name   = "timerfd",
+    .fs_ops = &timerfd_fs_ops,
 };

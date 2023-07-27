@@ -77,6 +77,7 @@ libos_sources = files(
     'sys/libos_dup.c',
     'sys/libos_epoll.c',
     'sys/libos_eventfd.c',
+    'sys/libos_timerfd.c',
     'sys/libos_exec.c',
     'sys/libos_exit.c',
     'sys/libos_fcntl.c',

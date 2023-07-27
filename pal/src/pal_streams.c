@@ -20,6 +20,7 @@ extern struct handle_ops g_thread_ops;
 extern struct handle_ops g_proc_ops;
 extern struct handle_ops g_event_ops;
 extern struct handle_ops g_eventfd_ops;
+extern struct handle_ops g_timerfd_ops;
 
 const struct handle_ops* g_pal_handle_ops[PAL_HANDLE_TYPE_BOUND] = {
     [PAL_TYPE_FILE]    = &g_file_ops,
@@ -32,6 +33,7 @@ const struct handle_ops* g_pal_handle_ops[PAL_HANDLE_TYPE_BOUND] = {
     [PAL_TYPE_THREAD]  = &g_thread_ops,
     [PAL_TYPE_EVENT]   = &g_event_ops,
     [PAL_TYPE_EVENTFD] = &g_eventfd_ops,
+    [PAL_TYPE_TIMERFD] = &g_timerfd_ops,
 };
 
 /* parse_stream_uri scan the uri, seperate prefix and search for
@@ -76,6 +78,12 @@ static int parse_stream_uri(const char** uri, char** prefix, struct handle_ops**
 
             if (strstartswith(u, URI_PREFIX_EVENTFD))
                 hops = &g_eventfd_ops;
+            break;
+	 case 15: ;
+            static_assert(static_strlen(URI_PREFIX_TIMERFD_CREATE) == 15, "URI_PREFIX_TIMERFD_CREATE has unexpected length");
+
+            if (strstartswith(u, URI_PREFIX_TIMERFD_CREATE))
+                hops = &g_timerfd_ops;
             break;
 
         case 9: ;
