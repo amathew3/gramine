@@ -1158,6 +1158,7 @@ long libos_syscall_getsockname(int fd, void* addr, int* _addrlen) {
     /* If the user provided buffer is too small, the address is truncated, but we report the actual
      * address size in `_addrlen`. */
     addrlen = MIN(addrlen, sock->local_addrlen);
+    sock->local_addr.ss_family=sock->domain;
     memcpy(addr, &sock->local_addr, addrlen);
     *_addrlen = sock->local_addrlen;
 
