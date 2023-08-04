@@ -684,6 +684,10 @@ static long sgx_ocall_eventfd(void* args) {
     struct ocall_eventfd* ocall_eventfd_args = args;
     return DO_SYSCALL(eventfd2, 0, ocall_eventfd_args->flags);
 }
+static long sgx_ocall_timerfd(void* args) {
+    struct ocall_timerfd* ocall_timerfd_args = args;
+    return DO_SYSCALL(timerfd_create, 0, ocall_timerfd_args->flags);
+}
 
 static long sgx_ocall_debug_map_add(void* args) {
     struct ocall_debug_map_add* ocall_debug_args = args;
@@ -802,6 +806,7 @@ sgx_ocall_fn_t ocall_table[OCALL_NR] = {
     [OCALL_DEBUG_MAP_REMOVE]         = sgx_ocall_debug_map_remove,
     [OCALL_DEBUG_DESCRIBE_LOCATION]  = sgx_ocall_debug_describe_location,
     [OCALL_EVENTFD]                  = sgx_ocall_eventfd,
+    [OCALL_TIMERFD]                  = sgx_ocall_timerfd,
     [OCALL_IOCTL]                    = sgx_ocall_ioctl,
     [OCALL_GET_QUOTE]                = sgx_ocall_get_quote,
     [OCALL_EDMM_MODIFY_PAGES_TYPE]   = sgx_ocall_edmm_modify_pages_type,

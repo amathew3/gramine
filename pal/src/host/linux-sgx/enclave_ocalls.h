@@ -105,6 +105,7 @@ int ocall_debug_map_remove(void* addr);
 int ocall_debug_describe_location(uintptr_t addr, char* buf, size_t buf_size);
 
 int ocall_eventfd(int flags);
+int ocall_timerfd(int flags);
 
 int ocall_ioctl(int fd, unsigned int cmd, unsigned long arg);
 

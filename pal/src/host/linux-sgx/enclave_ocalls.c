@@ -2066,6 +2066,32 @@ int ocall_eventfd(int flags) {
     sgx_reset_ustack(old_ustack);
     return retval;
 }
+int ocall_timerfd(int flags) {
+    int retval = 0;
+    struct ocall_timerfd* ocall_timerfd_args;
+
+    void* old_ustack = sgx_prepare_ustack();
+    ocall_timerfd_args = sgx_alloc_on_ustack_aligned(sizeof(*ocall_timerfd_args),
+                                                     alignof(*ocall_timerfd_args));
+    if (!ocall_timerfd_args) {
+        sgx_reset_ustack(old_ustack);
+        return -EPERM;
+    }
+
+    COPY_VALUE_TO_UNTRUSTED(&ocall_timerfd_args->flags, flags);
+
+    do {
+        retval = sgx_exitless_ocall(OCALL_TIMERFD, ocall_timerfd_args);
+    } while (retval == -EINTR);
+
+    if (retval < 0 && retval != -EINVAL && retval != -EMFILE && retval != -ENFILE &&
+            retval != -ENODEV && retval != -ENOMEM) {
+        retval = -EPERM;
+    }
+
+    sgx_reset_ustack(old_ustack);
+    return retval;
+}
 
 int ocall_ioctl(int fd, unsigned int cmd, unsigned long arg) {
     int retval;

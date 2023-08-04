@@ -71,6 +71,11 @@ typedef struct {
             /* TODO: add other flags in future, if needed (e.g., semaphore) */
             bool nonblocking;
         } eventfd;
+        struct {
+            PAL_IDX fd;
+            /* TODO: add other flags in future, if needed (e.g., semaphore) */
+            bool nonblocking;
+        } timerfd;
 
         struct {
             PAL_IDX fd;
