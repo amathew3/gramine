@@ -113,6 +113,7 @@ struct cmsghdr {
 #define TCP_KEEPINTVL 5     /* Interval between keepalives */
 #define TCP_KEEPCNT 6       /* Number of keepalives before death */
 #define TCP_USER_TIMEOUT 18 /* How long for loss retry before timeout */
+#define TCP_QUICKACK 12
 
 #define MAX_TCP_KEEPIDLE 32767
 #define MAX_TCP_KEEPINTVL 32767

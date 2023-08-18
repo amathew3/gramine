@@ -199,6 +199,7 @@ long libos_syscall_prlimit64(pid_t pid, int resource, const struct __kernel_rlim
                              struct __kernel_rlimit64* old_rlim);
 long libos_syscall_sendmmsg(int fd, struct mmsghdr* msg, unsigned int vlen, unsigned int flags);
 long libos_syscall_timerfd_create(unsigned int count);
+long libos_syscall_timerfd_settime(int fd, int flags, struct __kernel_itimerval* value, struct __kernel_itimerval* ovalue);
 long libos_syscall_eventfd2(unsigned int count, int flags);
 long libos_syscall_eventfd(unsigned int count);
 long libos_syscall_getcpu(unsigned* cpu, unsigned* node, void* unused_cache);

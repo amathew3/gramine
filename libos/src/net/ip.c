@@ -269,6 +269,8 @@ static int set_tcp_option(struct libos_handle* handle, int optname, void* optval
     memcpy(&value, optval, required_len);
 
     switch (optname) {
+	case TCP_QUICKACK:
+            break;
         case TCP_CORK:
             attr.socket.tcp_cork = value.i;
             break;
