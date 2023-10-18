@@ -360,7 +360,9 @@ long libos_syscall_renameat(int olddirfd, const char* oldpath, int newdirfd, con
     struct libos_dentry* new_dir_dent = NULL;
     struct libos_dentry* new_dent     = NULL;
     int ret = 0;
-
+    if (strcmp(oldpath,newpath) == 0){
+	goto out;
+    }
     if (!is_user_string_readable(oldpath) || !is_user_string_readable(newpath)) {
         return -EFAULT;
     }
