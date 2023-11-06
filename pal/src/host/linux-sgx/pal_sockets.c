@@ -267,7 +267,10 @@ static int connect(PAL_HANDLE handle, struct pal_socket_addr* addr,
     assert(linux_addrlen <= INT_MAX);
 
     int ret = ocall_connect_simple(handle->sock.fd, &sa_storage, &linux_addrlen);
-    if (ret < 0) {
+    if (ret == -EINPROGRESS) {
+       return ret;
+    }
+    else if (ret < 0) {
         return unix_to_pal_error(ret);
     }
 

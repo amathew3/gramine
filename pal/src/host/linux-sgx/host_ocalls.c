@@ -506,40 +506,40 @@ static long sgx_ocall_connect_simple(void* args) {
     struct ocall_connect_simple* ocall_connect_args = args;
     int ret = DO_SYSCALL_INTERRUPTIBLE(connect, ocall_connect_args->fd, ocall_connect_args->addr,
                                        (int)ocall_connect_args->addrlen);
-    if (ret < 0) {
-        /* XXX: Non blocking socket. Currently there is no way of notifying LibOS of successful or
-         * failed connection, so we have to block and wait. */
-        if (ret != -EINPROGRESS) {
-            return ret;
-        }
-        struct pollfd pfd = {
-            .fd = ocall_connect_args->fd,
-            .events = POLLOUT,
-        };
-        ret = DO_SYSCALL(poll, &pfd, 1, /*timeout=*/-1);
-        if (ret != 1 || pfd.revents == 0) {
-            return ret < 0 ? ret : -EINVAL;
-        }
-        int val = 0;
-        unsigned int len = sizeof(val);
-        ret = DO_SYSCALL(getsockopt, ocall_connect_args->fd, SOL_SOCKET, SO_ERROR, &val, &len);
-        if (ret < 0 || val < 0) {
-            return ret < 0 ? ret : -EINVAL;
-        }
-        if (val) {
-            return -val;
-        }
-        /* Connect succeeded. */
-    }
+//    if (ret < 0) {
+//        /* XXX: Non blocking socket. Currently there is no way of notifying LibOS of successful or
+//         * failed connection, so we have to block and wait. */
+//        if (ret != -EINPROGRESS) {
+//            return ret;
+//        }
+//        struct pollfd pfd = {
+//            .fd = ocall_connect_args->fd,
+//            .events = POLLOUT,
+//        };
+//        ret = DO_SYSCALL(poll, &pfd, 1, /*timeout=*/-1);
+//        if (ret != 1 || pfd.revents == 0) {
+//            return ret < 0 ? ret : -EINVAL;
+//        }
+//        int val = 0;
+//        unsigned int len = sizeof(val);
+//        ret = DO_SYSCALL(getsockopt, ocall_connect_args->fd, SOL_SOCKET, SO_ERROR, &val, &len);
+//        if (ret < 0 || val < 0) {
+//            return ret < 0 ? ret : -EINVAL;
+//        }
+//        if (val) {
+//            return -val;
+//        }
+//        /* Connect succeeded. */
+//    }
 
     int addrlen = sizeof(*ocall_connect_args->addr);
-    ret = DO_SYSCALL(getsockname, ocall_connect_args->fd, ocall_connect_args->addr, &addrlen);
-    if (ret < 0) {
-        return ret;
+    int ret_local = DO_SYSCALL(getsockname, ocall_connect_args->fd, ocall_connect_args->addr, &addrlen);
+    if (ret_local < 0) {
+        return ret_local;
     }
 
     ocall_connect_args->addrlen = addrlen;
-    return 0;
+    return ret;
 }
 
 static long sgx_ocall_recv(void* args) {

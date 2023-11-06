@@ -224,7 +224,10 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen) {
     /* XXX: this connect is always blocking (regardless of actual setting of nonblockingness on
      * `sock->pal_handle`. See also the comment in tcp connect implementation in Linux PAL. */
     ret = PalSocketConnect(sock->pal_handle, &pal_remote_addr, &pal_local_addr);
-    if (ret < 0) {
+    if (ret == -EINPROGRESS) {
+       return ret;
+    }
+    else if (ret < 0) {
         return ret == -PAL_ERROR_CONNFAILED ? -ECONNREFUSED : pal_to_unix_errno(ret);
     }
 
