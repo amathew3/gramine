@@ -1,0 +1,51 @@
+loader.entrypoint = "file:{{ gramine.libos }}"
+libos.entrypoint = "/sealed_test"
+loader.log_level = "all"
+loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
+loader.insecure__use_cmdline_argv = true
+
+# for eventfd test
+sys.insecure__allow_eventfd = true
+sys.file_check_policy="allow_all_but_log"
+# for flock_lock test
+sys.experimental__enable_flock = true
+
+fs.mounts = [
+  { path = "/lib", uri = "file:{{ gramine.runtimedir() }}" },
+  { path = "/sealed_test", uri = "file:sealed_test" },
+  { path = "{{ arch_libdir }}", uri = "file:{{ arch_libdir }}" },
+  { path = "/usr/{{ arch_libdir }}", uri = "file:/usr/{{ arch_libdir }}" },
+  { path = "/bin", uri = "file:/bin" },
+  {type= "encrypted",  path = "/home/sdp/gramine/CI-Examples/sealed_test/data/file1.txt", uri = "file:file1.txt",key_name="my_custom_key" },
+
+  { type = "tmpfs", path = "/mnt/tmpfs" },
+  { type = "encrypted", path = "/tmp_enc", uri = "file:tmp_enc", key_name = "my_custom_key" },
+  { type = "encrypted", path = "/encrypted_file_mrenclave.dat", uri = "file:encrypted_file_mrenclave.dat", key_name = "_sgx_mrenclave" },
+  { type = "encrypted", path = "/encrypted_file_mrsigner.dat", uri = "file:encrypted_file_mrsigner.dat", key_name = "_sgx_mrsigner" },
+]
+
+sgx.max_threads = 16
+sgx.debug = true
+sgx.edmm_enable = {{ 'true' if env.get('EDMM', '0') == '1' else 'false' }}
+
+sgx.allowed_files = [
+  "file:tmp/",
+  "file:root",     # for getdents test
+  "file:testfile", # for mmap_file test
+  "file:data/", # for exec_script test
+]
+
+sgx.trusted_files = [
+  "file:{{ gramine.libos }}",
+  "file:{{ gramine.runtimedir() }}/",
+  "file:{{ arch_libdir }}/libgcc_s.so.1",
+  "file:/usr{{ arch_libdir }}/libstdc++.so.6",
+  "file:sealed_test",
+  "file:/bin/sh",
+  "file:/bin/sleep",
+  "file:input.txt",
+]
+
+# See the `keys.c` test.
+fs.insecure__keys.default = "ffeeddccbbaa99887766554433221100"
+fs.insecure__keys.my_custom_key = "00112233445566778899aabbccddeeff"
