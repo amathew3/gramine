@@ -44,7 +44,6 @@ sgx.trusted_files = [
   "file:/bin/sh",
   "file:/bin/sleep",
   "file:input.txt",
-  "file:out123",
 ]
 
 # See the `keys.c` test.

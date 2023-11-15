@@ -17,8 +17,8 @@ int main (int argc, char** argv) {
    char *input_file=argv[1];
    char* en_filename=malloc(arglen+17); //Enough to hold the whole string
    strcpy(en_filename,"tmp_enc/");
+   strcat(en_filename,"encrypted_");
    strcat(en_filename,argv[1]);
-   strcat(en_filename,"_encrypted");
    ret = access(input_file, F_OK);
    if (ret < 0)
       errx(EXIT_FAILURE, "Input file is not accessible");
@@ -33,8 +33,11 @@ int main (int argc, char** argv) {
    /* Read and display data */
    while((fread(buffer, 50, 1, fp_read)>0)){
         fwrite(buffer , 50 , 1 , fp_write );
-        printf("%s\n", buffer);
    }
+   fseek(fp_write, 0, SEEK_SET);
+   while((fread(buffer, 50, 1, fp_write)>0))
+        printf("%s\n", buffer);
+
    fclose(fp_write);
    fclose(fp_read);
    
