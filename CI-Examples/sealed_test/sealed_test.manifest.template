@@ -1,6 +1,6 @@
 loader.entrypoint = "file:{{ gramine.libos }}"
-libos.entrypoint = "/sealed_test"
-loader.log_level = "all"
+libos.entrypoint = "sealed_test"
+#loader.log_level = "all"
 loader.env.LD_LIBRARY_PATH = "/lib:{{ arch_libdir }}:/usr/{{ arch_libdir }}"
 loader.insecure__use_cmdline_argv = true
 
@@ -44,6 +44,7 @@ sgx.trusted_files = [
   "file:/bin/sh",
   "file:/bin/sleep",
   "file:input.txt",
+  "file:out123",
 ]
 
 # See the `keys.c` test.
