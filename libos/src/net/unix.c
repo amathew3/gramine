@@ -40,6 +40,7 @@ static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, char* sock_name,
         *addrlen_ptr = sizeof(struct sockaddr_un);
     }
     if (*addrlen_ptr < offsetof(struct sockaddr_un, sun_path) + 1) {
+	log_debug("Invalid address");
         return -EINVAL;
     }
     static_assert(offsetof(struct sockaddr_un, sun_family) < offsetof(struct sockaddr_un, sun_path),
@@ -49,13 +50,15 @@ static int unaddr_to_sockname(void* addr, size_t* addrlen_ptr, char* sock_name,
     if (family != AF_UNIX) {
         return -EAFNOSUPPORT;
     }
-
+    log_debug("printing input addr =%s",addr);
     const char* path = (char*)addr + offsetof(struct sockaddr_un, sun_path);
+    log_debug("printing input addr =%s",path);
     size_t pathlen = *addrlen_ptr - offsetof(struct sockaddr_un, sun_path);
     assert(pathlen >= 1);
     if (path[0]) {
         /* Named UNIX socket. */
         pathlen = strnlen(path, pathlen);
+	return;
     }
 
     uint8_t hash[32];
@@ -122,9 +125,9 @@ static int create(struct libos_handle* handle) {
 }
 
 static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
+    log_debug("Inside unix bind call\n");
     struct libos_sock_handle* sock = &handle->info.sock;
     assert(locked(&sock->lock));
-
     char pipe_name[static_strlen(URI_PREFIX_PIPE_SRV) + 64 + 1] = URI_PREFIX_PIPE_SRV;
     int ret = unaddr_to_sockname(addr, &addrlen,
                                  pipe_name + static_strlen(URI_PREFIX_PIPE_SRV),
@@ -212,8 +215,7 @@ static int accept(struct libos_handle* handle, bool is_nonblocking,
     *out_client = client_handle;
     return 0;
 }
-
-static int connect(struct libos_handle* handle, void* addr, size_t addrlen) {
+static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool* out_inprogress) {
     struct libos_sock_handle* sock = &handle->info.sock;
     assert(locked(&sock->lock));
 
@@ -260,6 +262,7 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen) {
     }
 
     interrupt_epolls(handle);
+    *out_inprogress = false;
     return 0;
 }
 

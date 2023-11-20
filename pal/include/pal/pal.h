@@ -599,8 +599,7 @@ int PalSocketAccept(PAL_HANDLE handle, pal_stream_options_t options, PAL_HANDLE*
  * Can also be used to disconnect the socket, if #PAL_DISCONNECT is passed in \p addr.
  */
 int PalSocketConnect(PAL_HANDLE handle, struct pal_socket_addr* addr,
-                     struct pal_socket_addr* out_local_addr);
-
+ struct pal_socket_addr* out_local_addr, bool* out_inprogress);
 /*!
  * \brief Send data.
  *

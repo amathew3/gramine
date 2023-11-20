@@ -56,6 +56,7 @@ struct libos_pipe_handle {
 enum libos_sock_state {
     SOCK_NEW,
     SOCK_BOUND,
+    SOCK_CONNECTING,
     SOCK_CONNECTED,
     SOCK_LISTENING,
 };
@@ -98,6 +99,7 @@ struct libos_sock_handle {
     uint64_t sendtimeout_us;
     uint64_t receivetimeout_us;
     unsigned int last_error;
+     bool connecting_in_progress;
     /* This field denotes whether the socket was ever bound. */
     bool was_bound;
     /* This field indicates if the socket is ready for read-like operations (`recv`/`read` or

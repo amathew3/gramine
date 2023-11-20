@@ -32,11 +32,13 @@ static int verify_sockaddr(int expected_family, void* addr, size_t* addrlen_ptr)
             break;
         case AF_INET6:
             if (*addrlen_ptr < sizeof(struct sockaddr_in6)) {
+		log_debug("error form length check\n");
                 return -EINVAL;
             }
             memcpy(&family, (char*)addr + offsetof(struct sockaddr_in6, sin6_family),
                    sizeof(family));
             if (family != AF_INET6) {
+		log_debug("error from family check\n");
                 return -EAFNOSUPPORT;
             }
             /* Cap the address at the maximal possible size - rest of the input buffer (if any) is
@@ -132,11 +134,13 @@ static int create(struct libos_handle* handle) {
 }
 
 static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
+    log_debug("Inside bind in src/net");
     struct libos_sock_handle* sock = &handle->info.sock;
     assert(locked(&sock->lock));
 
     int ret = verify_sockaddr(sock->domain, addr, &addrlen);
     if (ret < 0) {
+	log_debug("error verify_sockaddr%d\n",sock->domain);
         return ret;
     }
 
@@ -145,6 +149,7 @@ static int bind(struct libos_handle* handle, void* addr, size_t addrlen) {
 
     ret = PalSocketBind(sock->pal_handle, &pal_ip_addr);
     if (ret < 0) {
+	log_debug("error PalSocketBind\n");
         return (ret == -PAL_ERROR_STREAMEXIST) ? -EADDRINUSE : pal_to_unix_errno(ret);
     }
 
@@ -207,8 +212,7 @@ static int accept(struct libos_handle* handle, bool is_nonblocking,
     *out_client = client_handle;
     return 0;
 }
-
-static int connect(struct libos_handle* handle, void* addr, size_t addrlen) {
+static int connect(struct libos_handle* handle, void* addr, size_t addrlen, bool* out_inprogress) {
     struct libos_sock_handle* sock = &handle->info.sock;
     assert(locked(&sock->lock));
 
@@ -223,11 +227,11 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen) {
 
     /* XXX: this connect is always blocking (regardless of actual setting of nonblockingness on
      * `sock->pal_handle`. See also the comment in tcp connect implementation in Linux PAL. */
-    ret = PalSocketConnect(sock->pal_handle, &pal_remote_addr, &pal_local_addr);
-    if (ret < 0) {
+     bool inprogress;
+    ret = PalSocketConnect(sock->pal_handle, &pal_remote_addr, &pal_local_addr, &inprogress);
+     if (ret < 0) {
         return ret == -PAL_ERROR_CONNFAILED ? -ECONNREFUSED : pal_to_unix_errno(ret);
     }
-
     memcpy(&sock->remote_addr, addr, addrlen);
     sock->remote_addrlen = addrlen;
     if (sock->state != SOCK_BOUND) {
@@ -235,6 +239,7 @@ static int connect(struct libos_handle* handle, void* addr, size_t addrlen) {
         assert(!sock->was_bound);
         pal_to_linux_sockaddr(&pal_local_addr, &sock->local_addr, &sock->local_addrlen);
     }
+    *out_inprogress = inprogress;
     return 0;
 }
 
@@ -245,7 +250,10 @@ static int disconnect(struct libos_handle* handle) {
     struct pal_socket_addr pal_ip_addr = {
         .domain = PAL_DISCONNECT,
     };
-    int ret = PalSocketConnect(sock->pal_handle, &pal_ip_addr, /*local_addr=*/NULL);
+     bool inprogress_unused;
+    int ret = PalSocketConnect(sock->pal_handle, &pal_ip_addr, /*local_addr=*/NULL,
+                               &inprogress_unused);
+    assert(inprogress_unused == false);
     return pal_to_unix_errno(ret);
 }
 
@@ -270,7 +278,7 @@ static int set_tcp_option(struct libos_handle* handle, int optname, void* optval
 
     switch (optname) {
 	case TCP_QUICKACK:
-            break;
+	    break;
         case TCP_CORK:
             attr.socket.tcp_cork = value.i;
             break;

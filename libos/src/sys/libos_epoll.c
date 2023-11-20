@@ -673,7 +673,9 @@ static int do_epoll_wait(int epfd, struct epoll_event* events, int maxevents, in
             if (pal_ret_events[i] & PAL_WAIT_WRITE) {
                 this_item_events |= items[i]->events & (EPOLLOUT | EPOLLWRNORM);
             }
-
+	      if (items[i]->handle->type == TYPE_SOCK) {
+                check_connect_inprogress_on_poll(items[i]->handle, pal_ret_events[i]);
+            }
             if (!this_item_events) {
                 /* This handle is not interested in events that were detected - epoll item was
                  * probably updated asynchronously. */

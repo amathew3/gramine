@@ -116,7 +116,7 @@ struct socket_ops {
     int (*accept)(PAL_HANDLE handle, pal_stream_options_t options, PAL_HANDLE* out_client,
                   struct pal_socket_addr* out_client_addr, struct pal_socket_addr* out_local_addr);
     int (*connect)(PAL_HANDLE handle, struct pal_socket_addr* addr,
-                   struct pal_socket_addr* out_local_addr);
+                   struct pal_socket_addr* out_local_addr, bool* out_inprogress);
     int (*send)(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_size,
                 struct pal_socket_addr* addr, bool force_nonblocking);
     int (*recv)(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_size,
@@ -147,14 +147,11 @@ void notify_failure(unsigned long error);
  * \param first_thread    First thread handle.
  * \param arguments       Application arguments.
  * \param environments    Environment variables.
- * \param post_callback   Callback into host-specific loader, useful for post-initialization actions
- *                        like additional logging. Can be NULL.
  *
  * This function must be called by the host-specific loader.
  */
 noreturn void pal_main(uint64_t instance_id, PAL_HANDLE parent_process, PAL_HANDLE first_thread,
-                       const char** arguments, const char** environments,
-                       void (*post_callback)(void));
+                       const char** arguments, const char** environments,void (*post_callback)(void));
 
 /* For initialization */
 
@@ -187,7 +184,7 @@ int _PalSocketAccept(PAL_HANDLE handle, pal_stream_options_t options, PAL_HANDLE
                      struct pal_socket_addr* out_client_addr,
                      struct pal_socket_addr* out_local_addr);
 int _PalSocketConnect(PAL_HANDLE handle, struct pal_socket_addr* addr,
-                      struct pal_socket_addr* out_local_addr);
+                      struct pal_socket_addr* out_local_addr,bool* out_inprogress);
 int _PalSocketSend(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_size,
                    struct pal_socket_addr* addr, bool force_nonblocking);
 int _PalSocketRecv(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_total_size,

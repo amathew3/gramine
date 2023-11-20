@@ -13,7 +13,6 @@
 #include "libos_socket.h"
 #include "libos_table.h"
 #include "linux_abi/errors.h"
-
 /*
  * Sockets can be in 4 states: NEW, BOUND, LISTENING and CONNECTED.
  *
@@ -83,7 +82,45 @@ struct libos_handle* get_new_socket_handle(int family, int type, int protocol,
 
     return handle;
 }
+void check_connect_inprogress_on_poll(struct libos_handle* handle,
+                                      pal_wait_flags_t pal_ret_events) {
+    /*
+     * Special case of a non-blocking socket that is INPROGRESS (connecting): must check if error or
+     * success of connecting. If error, then set SO_ERROR (last_error). If success, then move to
+     * SOCK_CONNECTED state and clear SO_ERROR.
+     *
+     * This is only relevant if POLLOUT event was requested. See `man 2 connect`, EINPROGRESS case.
+     *
+     * We first fetch `connecting_in_progress` instead of a proper lock on the handle to speed up
+     * the common case of an already-connected socket doing recv/send.
+     */
+     assert(handle->type == TYPE_SOCK);
 
+    if (!(pal_ret_events & PAL_WAIT_WRITE))
+        return;
+
+    bool inprog = __atomic_load_n(&handle->info.sock.connecting_in_progress, __ATOMIC_ACQUIRE);
+    if (!inprog)
+        return;
+
+    struct libos_sock_handle* sock = &handle->info.sock;
+    lock(&sock->lock);
+    if (sock->state != SOCK_CONNECTING) {
+        /* theoretically, another thread could be doing another select/poll on this socket and
+         * modify the state; we don't support this unlikely case */
+        BUG();
+    }
+    if (pal_ret_events & (PAL_WAIT_ERROR | PAL_WAIT_HANG_UP)) {
+        sock->last_error = ECONNREFUSED;
+    } else {
+        sock->last_error = 0;
+        __atomic_store_n(&sock->connecting_in_progress, false, __ATOMIC_RELEASE);
+        sock->state = SOCK_CONNECTED;
+        sock->can_be_read = true;
+        sock->can_be_written = true;
+    }
+    unlock(&sock->lock);
+}
 long libos_syscall_socket(int family, int type, int protocol) {
     switch (family) {
         case AF_UNIX:
@@ -212,7 +249,9 @@ long libos_syscall_socketpair(int family, int type, int protocol, int* sv) {
         unlock(&sock2->lock);
         goto out;
     }
-    ret = sock2->ops->connect(handle2, &addr, sizeof(addr));
+    bool inprogress;
+    ret = sock2->ops->connect(handle2, &addr, sizeof(addr), &inprogress);
+    assert(inprogress == false);
     if (ret < 0) {
         unlock(&sock2->lock);
         goto out;
@@ -242,7 +281,7 @@ long libos_syscall_socketpair(int family, int type, int protocol, int* sv) {
     int fd1 = set_new_fd_handle(handle2, is_cloexec ? FD_CLOEXEC : 0, NULL);
     if (fd1 < 0) {
         ret = fd1;
-        goto out;
+        goto out;	
     }
     int fd2 = set_new_fd_handle(handle3, is_cloexec ? FD_CLOEXEC : 0, NULL);
     if (fd2 < 0) {
@@ -274,23 +313,31 @@ out:
 }
 
 long libos_syscall_bind(int fd, void* addr, int _addrlen) {
+    log_debug("Inside libos_syscall_bind\n");
+    log_debug("Inside libos_syscall_bind fd=%d\n",fd);
+    log_debug("Inside libos_syscall_bind addrlen=%d\n",_addrlen);
+    log_debug("Inside libos_syscall_bind addr=%p\n",addr);
     int ret;
 
     if (_addrlen < 0) {
+	log_debug("invalid address");
         return -EINVAL;
     }
     size_t addrlen = _addrlen;
     if (!is_user_memory_readable(addr, addrlen)) {
+	log_debug("invalid fault");
         return -EFAULT;
     }
 
     struct libos_handle* handle = get_fd_handle(fd, NULL, NULL);
     if (!handle) {
+	log_debug("invalid fault1");
         return -EBADF;
     }
 
     if (handle->type != TYPE_SOCK) {
         put_handle(handle);
+	log_debug("invalid fault2");
         return -ENOTSOCK;
     }
 
@@ -300,9 +347,10 @@ long libos_syscall_bind(int fd, void* addr, int _addrlen) {
 
     if (sock->state != SOCK_NEW) {
         ret = -EINVAL;
+	log_debug("invalid fault3");
         goto out;
     }
-
+    log_debug("Just before the bind call");
     ret = sock->ops->bind(handle, addr, addrlen);
     if (ret < 0) {
         goto out;
@@ -315,6 +363,7 @@ long libos_syscall_bind(int fd, void* addr, int _addrlen) {
 out:
     unlock(&sock->lock);
     put_handle(handle);
+    log_debug("Returning from bind %d\n",ret);
     return ret;
 }
 
@@ -491,11 +540,17 @@ long libos_syscall_connect(int fd, void* addr, int _addrlen) {
     switch (sock->state) {
         case SOCK_NEW:
         case SOCK_BOUND:
+	case SOCK_CONNECTING:
         case SOCK_CONNECTED:
             break;
         default:
             ret = -EINVAL;
             goto out;
+    }
+    if (sock->state == SOCK_CONNECTING) {
+        assert(handle->flags & O_NONBLOCK);
+        ret = -EALREADY;
+        goto out;
     }
 
     if (sock->state == SOCK_CONNECTED) {
@@ -538,17 +593,25 @@ long libos_syscall_connect(int fd, void* addr, int _addrlen) {
         ret = -EISCONN;
         goto out;
     }
-
-    ret = sock->ops->connect(handle, addr, addrlen);
+     bool inprogress;
+    ret = sock->ops->connect(handle, addr, addrlen, &inprogress);
+    log_debug("Retrun value after connect %d",ret);
     maybe_epoll_et_trigger(handle, ret, /*in=*/false, /*was_partial=*/false);
+    log_debug("Return value after epoll%d",ret);
     if (ret < 0) {
         goto out;
     }
-
-    sock->state = SOCK_CONNECTED;
-    sock->can_be_read = true;
-    sock->can_be_written = true;
-    ret = 0;
+if (inprogress) {
+        sock->state = SOCK_CONNECTING;
+        __atomic_store_n(&sock->connecting_in_progress, true, __ATOMIC_RELEASE);
+        sock->last_error = EINPROGRESS;
+        ret = -((int)sock->last_error);
+    } else {
+        sock->state = SOCK_CONNECTED;
+        sock->can_be_read = true;
+        sock->can_be_written = true;
+        ret = 0;
+    }
 
 out:
     if (ret == -EINTR) {
@@ -636,9 +699,13 @@ ssize_t do_sendmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
     }
 
     lock(&sock->lock);
+    if (sock->state == SOCK_CONNECTING) {
+        unlock(&sock->lock);
+        return -EAGAIN;
+    }
     bool has_sendtimeout_set = !!sock->sendtimeout_us;
 
-    ret = -sock->last_error;
+    ret = -((ssize_t)sock->last_error);
     sock->last_error = 0;
 
     if (!ret && !sock->can_be_written) {
@@ -800,8 +867,12 @@ ssize_t do_recvmsg(struct libos_handle* handle, struct iovec* iov, size_t iov_le
     struct libos_sock_handle* sock = &handle->info.sock;
 
     lock(&sock->lock);
+    if (sock->state == SOCK_CONNECTING) {
+        unlock(&sock->lock);
+        return -EAGAIN;
+    }
     bool has_recvtimeout_set = !!sock->receivetimeout_us;
-    ret = -sock->last_error;
+    ret = -((ssize_t)sock->last_error);
     sock->last_error = 0;
     unlock(&sock->lock);
 
@@ -1126,6 +1197,7 @@ out:
 }
 
 long libos_syscall_getsockname(int fd, void* addr, int* _addrlen) {
+    log_debug("Inside getsockname %d",fd);
     if (!is_user_memory_readable(_addrlen, sizeof(*_addrlen))) {
         return -EFAULT;
     }
@@ -1159,6 +1231,7 @@ long libos_syscall_getsockname(int fd, void* addr, int* _addrlen) {
      * address size in `_addrlen`. */
     addrlen = MIN(addrlen, sock->local_addrlen);
     sock->local_addr.ss_family=sock->domain;
+    sock->remote_addr.ss_family=sock->domain;
     memcpy(addr, &sock->local_addr, addrlen);
     *_addrlen = sock->local_addrlen;
 
@@ -1240,6 +1313,7 @@ static int set_socket_option(struct libos_handle* handle, int optname, char* opt
 long libos_syscall_setsockopt(int fd, int level, int optname, char* optval, int optlen) {
     int ret;
     struct libos_handle* handle = get_fd_handle(fd, NULL, NULL);
+    log_debug("entering setsockopt\n");
     if (!handle) {
         return -EBADF;
     }
@@ -1279,6 +1353,7 @@ long libos_syscall_setsockopt(int fd, int level, int optname, char* optval, int 
     unlock(&sock->lock);
 
 out:
+    log_debug("setsockopt out region");
     put_handle(handle);
     return ret;
 }

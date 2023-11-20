@@ -1424,8 +1424,8 @@ int ocall_connect(int domain, int type, int protocol, int ipv6_v6only, const str
     sgx_reset_ustack(old_ustack);
     return retval;
 }
-
-int ocall_connect_simple(int fd, struct sockaddr_storage* addr, size_t* addrlen) {
+int ocall_connect_simple(int fd, int nonblocking, struct sockaddr_storage* addr, size_t* addrlen,
+                         bool* out_inprogress) {
     int ret;
     void* old_ustack = sgx_prepare_ustack();
     struct ocall_connect_simple* ocall_connect_args;
@@ -1452,13 +1452,24 @@ int ocall_connect_simple(int fd, struct sockaddr_storage* addr, size_t* addrlen)
     do {
         ret = sgx_exitless_ocall(OCALL_CONNECT_SIMPLE, ocall_connect_args);
     } while (ret == -EINTR);
-
+     bool inprogress = false;
+    if (ret == -EINPROGRESS) {
+        if (!nonblocking) {
+            /* EINPROGRESS can be returned only on non-blocking sockets */
+            ret = -EPERM;
+            goto out;
+        }
+        /* POSIX/Linux have an unusual semantics for EINPROGRESS: the connect operation is
+         * considered successful, but the return value is -EINPROGRESS error code. We don't want to
+         * replicate this oddness in Gramine, so we return `0` and set a special variable. */
+        inprogress = true;
+        ret = 0;
+    }
     if (ret < 0) {
         if (ret != -EACCES && ret != -EPERM && ret != -EADDRINUSE && ret != -EADDRNOTAVAIL
                 && ret != -EAFNOSUPPORT && ret != -EAGAIN && ret != -EALREADY && ret != -EBADF
-                && ret != -ECONNREFUSED && ret != -EINPROGRESS && ret != -EISCONN
-                && ret != -ENETUNREACH && ret != -ENOTSOCK && ret != -EPROTOTYPE
-                && ret != -ETIMEDOUT) {
+		&& ret != -ECONNREFUSED && ret != -EISCONN && ret != -ENETUNREACH
+                && ret != -ENOTSOCK && ret != -EPROTOTYPE && ret != -ETIMEDOUT) {
             ret = -EPERM;
         }
         goto out;
@@ -1475,6 +1486,7 @@ int ocall_connect_simple(int fd, struct sockaddr_storage* addr, size_t* addrlen)
         goto out;
     }
     *addrlen = new_addrlen;
+     *out_inprogress = inprogress;
     ret = 0;
 
 out:

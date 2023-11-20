@@ -156,6 +156,7 @@ static int do_getsockname(int fd, struct sockaddr_storage* sa_storage) {
 }
 
 static int bind(PAL_HANDLE handle, struct pal_socket_addr* addr) {
+    log_debug("Inside bind from pal_socket implementation");
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
     if (addr->domain != handle->sock.domain) {
         return -PAL_ERROR_INVAL;
@@ -191,6 +192,7 @@ static int bind(PAL_HANDLE handle, struct pal_socket_addr* addr) {
         case PAL_IPV6:
             if (!addr->ipv6.port) {
                 ret = do_getsockname(handle->sock.fd, &linux_addr.sa_storage);
+		log_debug("Inside ipv6 port");
                 if (ret < 0) {
                     /* This should never happen, but we have to handle it somehow. Socket was bound,
                      * but something is wrong... */
@@ -260,7 +262,7 @@ static int tcp_accept(PAL_HANDLE handle, pal_stream_options_t options, PAL_HANDL
 }
 
 static int connect(PAL_HANDLE handle, struct pal_socket_addr* addr,
-                   struct pal_socket_addr* out_local_addr) {
+                   struct pal_socket_addr* out_local_addr,bool* out_inprogress) {
     assert(handle->hdr.type == PAL_TYPE_SOCKET);
     if (addr->domain != PAL_DISCONNECT && addr->domain != handle->sock.domain) {
         return -PAL_ERROR_INVAL;
@@ -269,43 +271,48 @@ static int connect(PAL_HANDLE handle, struct pal_socket_addr* addr,
     struct sockaddr_storage sa_storage;
     size_t linux_addrlen;
     pal_to_linux_sockaddr(addr, &sa_storage, &linux_addrlen);
-    assert(linux_addrlen <= INT_MAX);
+    assert(linux_addrlen <= INT_MAX);	
 
+    log_debug("Inside the  connect call\n");
     int ret = DO_SYSCALL(connect, handle->sock.fd, &sa_storage, (int)linux_addrlen);
-    if (ret < 0) {
+    log_debug("After the  connect call%d\n",ret);
+    if (ret < 0 && ret != -EINPROGRESS) {
+        return unix_to_pal_error(ret);
         /* XXX: Non blocking socket. Currently there is no way of notifying LibOS of successful or
          * failed connection, so we have to block and wait. */
-        if (ret != -EINPROGRESS) {
-            return unix_to_pal_error(ret);
-        }
-        struct pollfd pfd = {
-            .fd = handle->sock.fd,
-            .events = POLLOUT,
-        };
-        ret = DO_SYSCALL(poll, &pfd, 1, /*timeout=*/-1);
-        if (ret != 1 || pfd.revents == 0) {
-            return ret < 0 ? unix_to_pal_error(ret) : -PAL_ERROR_INVAL;
-        }
-        int val = 0;
-        unsigned int len = sizeof(val);
-        ret = DO_SYSCALL(getsockopt, handle->sock.fd, SOL_SOCKET, SO_ERROR, &val, &len);
-        if (ret < 0 || val < 0) {
-            return ret < 0 ? unix_to_pal_error(ret) : -PAL_ERROR_INVAL;
-        }
-        if (val) {
-            return unix_to_pal_error(-val);
-        }
-        /* Connect succeeded. */
-    }
+	ret=-1;
+       // if (ret != -EINPROGRESS) {
+       //     return unix_to_pal_error(ret);
+       // }
+       // struct pollfd pfd = {
+       //     .fd = handle->sock.fd,
+       //     .events = POLLOUT,
+       // };
+       // ret = DO_SYSCALL(poll, &pfd, 1, /*timeout=*/-1);
+       // if (ret != 1 || pfd.revents == 0) {
+       //     return ret < 0 ? unix_to_pal_error(ret) : -PAL_ERROR_INVAL;
+       // }
+       // int val = 0;
+       // unsigned int len = sizeof(val);
+       // ret = DO_SYSCALL(getsockopt, handle->sock.fd, SOL_SOCKET, SO_ERROR, &val, &len);
+       // if (ret < 0 || val < 0) {
+       //     return ret < 0 ? unix_to_pal_error(ret) : -PAL_ERROR_INVAL;
+       // }
+       // if (val) {
+       //     return unix_to_pal_error(-val);
+       // }
+       // /* Connect succeeded. */
+   }
 
     if (out_local_addr) {
-        ret = do_getsockname(handle->sock.fd, &sa_storage);
-        if (ret < 0) {
+	  int getsockname_ret = do_getsockname(handle->sock.fd, &sa_storage);
+        if (getsockname_ret < 0) {
             /* This should never happen, but we have to handle it somehow. */
-            return ret;
+             return getsockname_ret;
         }
         linux_to_pal_sockaddr(&sa_storage, out_local_addr);
     }
+    *out_inprogress = (ret == -EINPROGRESS);
     return 0;
 }
 
@@ -718,11 +725,11 @@ int _PalSocketAccept(PAL_HANDLE handle, pal_stream_options_t options, PAL_HANDLE
 }
 
 int _PalSocketConnect(PAL_HANDLE handle, struct pal_socket_addr* addr,
-                      struct pal_socket_addr* out_local_addr) {
+                      struct pal_socket_addr* out_local_addr, bool* out_inprogress) {
     if (!handle->sock.ops->connect) {
         return -PAL_ERROR_NOTSUPPORT;
     }
-    return handle->sock.ops->connect(handle, addr, out_local_addr);
+    return handle->sock.ops->connect(handle, addr, out_local_addr, out_inprogress);
 }
 
 int _PalSocketSend(PAL_HANDLE handle, struct iovec* iov, size_t iov_len, size_t* out_size,

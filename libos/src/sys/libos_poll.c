@@ -202,7 +202,9 @@ static long do_poll(struct pollfd* fds, size_t fds_len, uint64_t* timeout_us) {
             fds[i].revents |= fds[i].events & (POLLIN | POLLRDNORM);
         if (ret_events[i] & PAL_WAIT_WRITE)
             fds[i].revents |= fds[i].events & (POLLOUT | POLLWRNORM);
-
+         if (libos_handles[i]->type == TYPE_SOCK) {
+            check_connect_inprogress_on_poll(libos_handles[i], ret_events[i]);
+        }
         if (fds[i].revents)
             ret_events_count++;
     }
